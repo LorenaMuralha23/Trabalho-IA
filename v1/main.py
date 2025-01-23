@@ -9,7 +9,6 @@ from itertools import product
 
 import os
 
-
 def define_transforms(height, width):
     data_transforms = {
         'train': v2.Compose([
@@ -26,7 +25,6 @@ def define_transforms(height, width):
         ])
     }
     return data_transforms
-
 
 def read_images(data_transforms):
     # Diretório base relativo ao local do script
@@ -50,7 +48,6 @@ def read_images(data_transforms):
         test_path, transform=data_transforms['test'])
 
     return train_data, validation_data, test_data
-
 
 if __name__ == '__main__':
     data_transforms = define_transforms(224, 224)
