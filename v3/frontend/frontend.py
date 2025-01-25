@@ -8,13 +8,6 @@ queue_lock = Lock()
 
 def main():
     combine()
-    json1 = {"status": "FINISHED"}
-    json2 = {"status": "ONLINE"}
-    json3 = {"status": "FINISHED"}
-
-    print(receiveConfirm(json1))
-    print(receiveConfirm(json2))
-    print(receiveConfirm(json3))
 
 def combine():
     replications = 10
@@ -34,17 +27,21 @@ def combine():
         }, indent=4)
         queue.put(json_data)
 
-    # while not queue.empty():
-    #    item = queue.get()
-    #    print(item)
-
-def receiveConfirm(receivedJson):
-    with queue_lock:  # Garante que apenas um processo acessa a fila por vez
+def processRequest(receivedJson):
+    with queue_lock:
         status = receivedJson.get('status')
         if status in ['ONLINE', 'FINISHED']:
+            if status == 'FINISHED':
+                data = receivedJson.get('data')
+                if data:
+                    with open("results.txt", "a") as file:
+                        file.write(json.dumps(data) + "\n")
+                else:
+                    print("Aviso: Nenhum dado encontrado no JSON para salvar.")
+            
             if not queue.empty():
                 return queue.get()
             else:
-                return None  # Retorno opcional se a fila estiver vazia
+                return None
 
 main()

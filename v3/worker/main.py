@@ -1,130 +1,74 @@
-import ray
-from itertools import product
 from cnn import CNN
 import torch
 from torchvision import datasets
 from torchvision.transforms import v2
-import os
 import time
+import os
+import json
+import socket
 
-# Define as transformações dos dados
+class Main:
+    def define_transforms(self, height, width):
+        data_transforms = {
+            'train' : v2.Compose([
+                        v2.Resize((height,width)),
+                        v2.Compose([v2.ToImage(), v2.ToDtype(torch.float32, scale=True)]),
+                        v2.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+            ]),
+            'test'  : v2.Compose([
+                        v2.Resize((height,width)),
+                        v2.Compose([v2.ToImage(), v2.ToDtype(torch.float32, scale=True)]),
+                        v2.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+            ])
+        }
+        return data_transforms
 
+    def read_images(self, data_transforms):
+        # Diretório base relativo ao local do script
+        base_dir = os.path.join(os.path.dirname(__file__), '../..', 'data/resumido')
 
-def define_transforms(height, width):
-    data_transforms = {
-        'train': v2.Compose([
-            v2.Resize((height, width)),
-            v2.ToImage(),
-            v2.ToDtype(torch.float32, scale=True),
-            v2.Normalize(mean=[0.485, 0.456, 0.406],
-                         std=[0.229, 0.224, 0.225]),
-        ]),
-        'test': v2.Compose([
-            v2.Resize((height, width)),
-            v2.ToImage(),
-            v2.ToDtype(torch.float32, scale=True),
-            v2.Normalize(mean=[0.485, 0.456, 0.406],
-                         std=[0.229, 0.224, 0.225]),
-        ])
-    }
-    return data_transforms
+        train_path = os.path.join(base_dir, 'train')
+        validation_path = os.path.join(base_dir, 'validation')
+        test_path = os.path.join(base_dir, 'test')
 
-# Função para ler as imagens
+        # Verifica se os diretórios existem
+        if not all(os.path.exists(path) for path in [train_path, validation_path, test_path]):
+            raise FileNotFoundError(f"Um ou mais caminhos não foram encontrados no diretório base: {base_dir}")
 
+        # Carrega os dados
+        train_data = datasets.ImageFolder(train_path, transform=data_transforms['train'])
+        validation_data = datasets.ImageFolder(validation_path, transform=data_transforms['test'])
+        test_data = datasets.ImageFolder(test_path, transform=data_transforms['test'])
 
-def read_images(data_transforms):
-    base_dir = os.path.join(os.path.dirname(__file__), '..', 'data/resumido')
-    train_path = os.path.join(base_dir, 'train')
-    validation_path = os.path.join(base_dir, 'validation')
-    test_path = os.path.join(base_dir, 'test')
+        return train_data, validation_data, test_data
+    
+    def createJson(self, status, acc_media, rep_max, duration):
+        try:
+            # Obter o IP da interface de rede principal
+            with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+                s.connect(("8.8.8.8", 80))  # Conecta ao Google DNS para determinar o IP
+                ip_address = s.getsockname()[0]
+            
+            # Criar o dicionário com os dados
+            createdJson = {
+                "machine_id": 'worker-01',
+                "status": status,
+                "acc_media": acc_media,
+                "rep_max": rep_max,
+                "duration": duration
+            }
 
-    if not all(os.path.exists(path) for path in [train_path, validation_path, test_path]):
-        raise FileNotFoundError(
-            f"Um ou mais caminhos não foram encontrados no diretório base: {base_dir}")
+            # Converter o dicionário para JSON
+            createdJson = json.dumps(createdJson, indent=4)
 
-    train_data = datasets.ImageFolder(
-        train_path, transform=data_transforms['train'])
-    validation_data = datasets.ImageFolder(
-        validation_path, transform=data_transforms['test'])
-    test_data = datasets.ImageFolder(
-        test_path, transform=data_transforms['test'])
+            return createdJson
 
-    return train_data, validation_data, test_data
+        except Exception as e:
+            return json.dumps({"error": str(e)}, indent=4)         
 
-
-# Função remota para executar uma combinação de parâmetros
-@ray.remote
-def execute_combination(train_data_ref, validation_data_ref, test_data_ref, batch_size, model_name, epochs, learning_rate, weight_decay, replications):
-    train_data = ray.get(train_data_ref)
-    validation_data = ray.get(validation_data_ref)
-    test_data = ray.get(test_data_ref)
-
-    cnn = CNN(train_data, validation_data, test_data, batch_size)
-    start_time = time.time()
-    average_accuracy, better_replication = cnn.create_and_train_cnn(
-        model_name, epochs, learning_rate, weight_decay, replications)
-    end_time = time.time()
-
-    duration = end_time - start_time
-    hours = int(duration // 3600)
-    minutes = int((duration % 3600) // 60)
-    seconds = int(duration % 60)
-    milliseconds = int((duration * 1000) % 1000)
-
-    return (
-        model_name, epochs, learning_rate, weight_decay,
-        average_accuracy, better_replication,
-        f"{hours:02}:{minutes:02}:{seconds:02}:{milliseconds:03}"
-    )
-
-
-if __name__ == '__main__':
-    # Inicializa o Ray
-    ray.init(address="auto")
-
-    data_transforms = define_transforms(224, 224)
-    train_data, validation_data, test_data = read_images(data_transforms)
-
-    # Armazena datasets no Ray
-    train_data_ref = ray.put(train_data)
-    validation_data_ref = ray.put(validation_data)
-    test_data_ref = ray.put(test_data)
-
-    # Parâmetros
-    replications = 10
-    model_names = ['alexnet', 'mobilenet_v3_large', 'vgg11']
-    epochs = [10, 20]
-    learning_rates = [0.001, 0.0001]
-    weight_decays = [0, 0.0001]
-    batch_size = 8
-
-    combinations = list(product(model_names, epochs,
-                                learning_rates, weight_decays))
-
-    # Cria tarefas distribuídas
-    futures = [
-        execute_combination.remote(
-            train_data_ref, validation_data_ref, test_data_ref, batch_size,
-            model_name, epochs, learning_rate, weight_decay, replications
-        )
-        for model_name, epochs, learning_rate, weight_decay in combinations
-    ]
-
-    # Aguarda os resultados
-    results = ray.get(futures)
-
-    # Salva os resultados
-    with open("results_ray.txt", "a") as file:
-        for i, result in enumerate(results):
-            model_name, epochs, learning_rate, weight_decay, acc, best_rep, exec_time = result
-            result_text = (
-                f"Combination {i}:\n"
-                f"\t{model_name} - {epochs} - {learning_rate} - {weight_decay}\n"
-                f"\tAverage Accuracy: {acc}\n"
-                f"\tBetter Replication: {best_rep}\n"
-                f"\tExecution Time: {exec_time}\n\n"
-            )
-            print(result_text)
-            file.write(result_text)
-
-    ray.shutdown()
+    def processTask(self, cnn, replications, model_name, epochs, learning_rate, weight_decay):
+        start_time = time.time()
+        acc_media, rep_max = cnn.create_and_train_cnn(model_name, epochs, learning_rate, weight_decay, replications)
+        end_time = time.time()
+        duration = end_time - start_time
+        print(self.createJson('FINISHED', acc_media, rep_max, duration))

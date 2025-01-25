@@ -90,7 +90,7 @@ if __name__ == '__main__':
 
     # Gera todas as combinações possíveis
     combinations = list(product(model_names, epochs, learning_rates, weight_decays))
-
+    
     # Adiciona a CNN como argumento para cada combinação
     combinations_with_cnn = [
         (model_name, epochs, learning_rate, weight_decay, replications, cnn)
