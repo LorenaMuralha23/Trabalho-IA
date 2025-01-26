@@ -2,7 +2,7 @@ import json
 import socket
 import os
 from queue import Queue
-from multiprocessing import Process
+from multiprocessing import Process, active_children
 from cnn import CNN
 import torch
 from torchvision import datasets
@@ -19,14 +19,18 @@ train_data, validation_data, test_data = main.read_images(data_transforms)
 cnn = CNN(train_data, validation_data, test_data, 8)
 
 def main():
-    json1 = {
+    json = {
         "data": [
-            {"replications": 2, "model_name": "resnet18", "epochs": 10, "learning_rate": 0.01, "weight_decay": 0.001},
-            {"replications": 2, "model_name": "vgg19", "epochs": 15, "learning_rate": 0.005, "weight_decay": 0.0005}
+            {"replications": 2, "model_name": "alexnet", "epochs": 10, "learning_rate": 0.001, "weight_decay": 0},
+            {"replications": 2, "model_name": "alexnet", "epochs": 10, "learning_rate": 0.001, "weight_decay": 0.0001},
+            {"replications": 2, "model_name": "alexnet", "epochs": 10, "learning_rate": 0.0001, "weight_decay": 0},
+            {"replications": 2, "model_name": "alexnet", "epochs": 10, "learning_rate": 0.0001, "weight_decay": 0.0001}
         ]
     }
-    receiveTask(json1)
+    receiveTask(json)
 
+# É nesse método que a mensagem do front end deve chegar.
+# Ela precisa ser mapeada por {IP/Porta}.
 def receiveTask(receivedJson):
     # Verifica se o campo 'data' existe no JSON e se é uma lista
     if 'data' in receivedJson and isinstance(receivedJson['data'], list):
@@ -37,6 +41,7 @@ def receiveTask(receivedJson):
         # Lida com o caso em que 'data' não é uma lista ou não está presente
         print("O JSON recebido não contém um campo 'data' válido.")
 
+# É o método responsável por enviar as mensagens para o front end
 def sendJson(jsonToSend):
     return jsonToSend
 
@@ -79,6 +84,8 @@ def processTask(combination):
     wd = combination.get('weight_decay')
     task = Process(target=process_task_wrapper, args=(cnn, repl, mn, epochs, lr, wd))
     task.start()
+    print(f"Processo iniciado: PID={task.pid}, Nome={task.name}")
+    print(f"Processos ativos no momento: {len(active_children())}")
 
 if __name__ == "__main__":
     main()

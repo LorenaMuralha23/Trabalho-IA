@@ -27,6 +27,7 @@ def combine():
         }, indent=4)
         queue.put(json_data)
 
+# É nesse método que o worker retorna/envia o json
 def processRequest(receivedJson):
     with queue_lock:
         status = receivedJson.get('status')
@@ -39,6 +40,19 @@ def processRequest(receivedJson):
                 else:
                     print("Aviso: Nenhum dado encontrado no JSON para salvar.")
             
+            elif status == 'ONLINE':
+                num_cores = receivedJson.get('num_cores')
+                if num_cores:
+                    combinations = []  # Lista para armazenar as combinações retiradas da fila
+                    for _ in range(num_cores):
+                        if not queue.empty():
+                            combinations.append(queue.get())
+                        else:
+                            break
+                    
+                    # Retorna as combinações armazenadas no formato de um objeto
+                    return {"data": combinations}
+                
             if not queue.empty():
                 return queue.get()
             else:

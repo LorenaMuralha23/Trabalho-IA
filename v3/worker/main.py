@@ -42,7 +42,7 @@ class Main:
 
         return train_data, validation_data, test_data
     
-    def createJson(self, status, acc_media, rep_max, duration):
+    def createJson(self, combination, status, acc_media, rep_max, duration):
         try:
             # Obter o IP da interface de rede principal
             with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
@@ -52,6 +52,7 @@ class Main:
             # Criar o dicionário com os dados
             createdJson = {
                 "machine_id": 'worker-01',
+                "combination": combination,
                 "status": status,
                 "acc_media": acc_media,
                 "rep_max": rep_max,
@@ -71,4 +72,6 @@ class Main:
         acc_media, rep_max = cnn.create_and_train_cnn(model_name, epochs, learning_rate, weight_decay, replications)
         end_time = time.time()
         duration = end_time - start_time
-        print(self.createJson('FINISHED', acc_media, rep_max, duration))
+        currentCombination = [model_name, epochs, learning_rate, weight_decay]
+        # Ao invés do print, o json gerado é o que deve ser enviado para o front end
+        print(self.createJson(currentCombination, 'FINISHED', acc_media, rep_max, duration))
